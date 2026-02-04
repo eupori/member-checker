@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>카카오톡 멤버 체커</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #FEE500 0%, #3C1E1E 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container { max-width: 1200px; margin: 0 auto; }
+        
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        
+        .card h2 { color: #333; margin-bottom: 16px; font-size: 1.3rem; }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+        
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            min-height: 180px;
+        }
+        
+        .upload-area:hover { border-color: #FEE500; background: #fffef5; }
+        .upload-area.dragover { border-color: #FEE500; background: #fffce6; }
+        .upload-area.has-file { border-color: #28a745; background: #f0fff0; }
+        .upload-area input { display: none; }
+        .upload-area .icon { font-size: 3rem; margin-bottom: 12px; }
+        
+        .image-previews {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 16px;
+        }
+        
+        .image-preview-item {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            aspect-ratio: 1;
+        }
+        
+        .image-preview-item img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .image-preview-item .remove-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(220, 53, 69, 0.9);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .file-info {
+            background: #d4edda;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-top: 16px;
+            display: none;
+        }
+        
+        .file-info.show { display: flex; align-items: center; gap: 12px; }
+        .file-info .icon { font-size: 1.5rem; }
+        .file-info .details { flex: 1; }
+        .file-info .filename { font-weight: bold; color: #155724; }
+        .file-info .filesize { font-size: 0.85rem; color: #666; }
+        
+        .baseline-info {
+            background: #e3f2fd;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .baseline-info .row { display: flex; gap: 24px; flex-wrap: wrap; }
+        .baseline-info .item { flex: 1; min-width: 150px; }
+        .baseline-info .label { font-size: 0.85rem; color: #666; margin-bottom: 4px; }
+        .baseline-info .value { font-size: 1.3rem; font-weight: bold; color: #1565c0; }
+        
+        .baseline-edit { margin-top: 12px; }
+        .baseline-edit input {
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            margin-right: 8px;
+        }
+        
+        .baseline-edit input:focus { outline: none; border-color: #FEE500; }
+        
+        .btn {
+            background: linear-gradient(135deg, #FEE500 0%, #F5B800 100%);
+            color: #3C1E1E;
+            border: none;
+            padding: 14px 28px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(254, 229, 0, 0.4); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn.full { width: 100%; margin-top: 20px; }
+        .btn.small { padding: 8px 16px; font-size: 0.9rem; }
+        .btn.secondary { background: #6c757d; color: white; }
+        
+        .results { display: none; }
+        .results.show { display: block; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        @media (max-width: 768px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+        
+        .stat-box {
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .stat-box.baseline { background: #e3f2fd; border: 2px solid #2196F3; }
+        .stat-box.joins { background: #d4edda; border: 2px solid #28a745; }
+        .stat-box.leaves { background: #f8d7da; border: 2px solid #dc3545; }
+        .stat-box.current { background: #FEE500; border: 2px solid #F5B800; }
+        .stat-box .label { font-size: 0.85rem; color: #666; margin-bottom: 4px; }
+        .stat-box .count { font-size: 2.2rem; font-weight: bold; }
+        
+        .result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        @media (max-width: 768px) { .result-grid { grid-template-columns: 1fr; } }
+        
+        .result-box { padding: 16px; border-radius: 12px; }
+        .result-box.matched { background: #d4edda; border: 2px solid #28a745; }
+        .result-box.only-screenshot { background: #fff3cd; border: 2px solid #ffc107; }
+        .result-box.only-expected { background: #f8d7da; border: 2px solid #dc3545; }
+        .result-box h3 { font-size: 1rem; margin-bottom: 8px; }
+        .result-box .count { font-size: 1.8rem; font-weight: bold; margin-bottom: 8px; }
+        .result-box ul { list-style: none; max-height: 200px; overflow-y: auto; }
+        .result-box li { padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.1); font-size: 0.9rem; }
+        
+        .loading { display: none; text-align: center; padding: 20px; }
+        .loading.show { display: block; }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #FEE500;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .event-list { margin-top: 12px; max-height: 150px; overflow-y: auto; }
+        .event-item { padding: 6px 10px; margin: 4px 0; border-radius: 6px; font-size: 0.9rem; }
+        .event-item.join { background: #d4edda; }
+        .event-item.leave { background: #f8d7da; }
+        .event-item .date { font-size: 0.8rem; color: #666; margin-left: 8px; }
+        
+        .tab-buttons { display: flex; gap: 8px; margin-bottom: 16px; }
+        .tab-btn {
+            padding: 10px 20px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .tab-btn.active { border-color: #FEE500; background: #fffce6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💬 카카오톡 멤버 체커</h1>
+        
+        <!-- 기준 데이터 -->
+        <div class="card">
+            <h2>📋 기준 데이터</h2>
+            <div class="baseline-info" id="baselineInfo">
+                <div class="row">
+                    <div class="item">
+                        <div class="label">길드명</div>
+                        <div class="value" id="baselineGuild">-</div>
+                    </div>
+                    <div class="item">
+                        <div class="label">기준 날짜</div>
+                        <div class="value" id="baselineDateDisplay">-</div>
+                    </div>
+                    <div class="item">
+                        <div class="label">기준 인원</div>
+                        <div class="value" id="baselineCountDisplay">-</div>
+                    </div>
+                </div>
+            </div>
+            <div class="baseline-edit">
+                <input type="text" id="guildNameInput" placeholder="길드명" value="HERMES 길드" style="width:150px">
+                <input type="date" id="baselineDateInput" value="2026-02-04">
+                <input type="number" id="baselineCountInput" value="49" min="0" style="width:80px">
+                <button class="btn small" onclick="saveBaseline()">기준 저장</button>
+            </div>
+        </div>
+        
+        <!-- 업로드 영역 -->
+        <div class="grid">
+            <div class="card">
+                <h2>📸 멤버 목록 스크린샷</h2>
+                <div class="upload-area" id="imageUploadArea">
+                    <input type="file" id="imageInput" accept="image/*" multiple>
+                    <div class="icon">🖼️</div>
+                    <p>클릭하거나 이미지를 드래그하세요</p>
+                    <p style="font-size:0.9rem;color:#666;margin-top:8px">여러 장 선택 가능</p>
+                </div>
+                <div class="image-previews" id="imagePreviews"></div>
+            </div>
+            
+            <div class="card">
+                <h2>📄 카카오톡 채팅 로그</h2>
+                <div class="upload-area" id="textUploadArea">
+                    <input type="file" id="textInput" accept=".txt">
+                    <div class="icon">📁</div>
+                    <p>클릭하거나 .txt 파일을 드래그하세요</p>
+                    <p style="font-size:0.9rem;color:#666;margin-top:8px">카카오톡 대화 내보내기</p>
+                </div>
+                <div class="file-info" id="fileInfo">
+                    <div class="icon">✅</div>
+                    <div class="details">
+                        <div class="filename" id="fileName"></div>
+                        <div class="filesize" id="fileSize"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 분석 버튼 -->
+        <div class="card">
+            <button class="btn full" id="analyzeBtn" onclick="runAnalysis()">🔍 분석하기</button>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>분석 중...</p>
+            </div>
+        </div>
+        
+        <!-- 결과 -->
+        <div class="card results" id="results">
+            <h2>📊 분석 결과</h2>
+            
+            <div class="stats-grid">
+                <div class="stat-box baseline">
+                    <div class="label">기준 인원</div>
+                    <div class="count" id="resultBaseline">-</div>
+                </div>
+                <div class="stat-box joins">
+                    <div class="label">입장</div>
+                    <div class="count" id="resultJoins">-</div>
+                </div>
+                <div class="stat-box leaves">
+                    <div class="label">퇴장</div>
+                    <div class="count" id="resultLeaves">-</div>
+                </div>
+                <div class="stat-box current">
+                    <div class="label">현재 인원</div>
+                    <div class="count" id="resultCurrent">-</div>
+                </div>
+            </div>
+            
+            <!-- 입장/퇴장 상세 -->
+            <div class="grid" style="margin-bottom:20px">
+                <div>
+                    <h3 style="margin-bottom:8px">✅ 입장 목록</h3>
+                    <div class="event-list" id="joinsList"></div>
+                </div>
+                <div>
+                    <h3 style="margin-bottom:8px">❌ 퇴장 목록</h3>
+                    <div class="event-list" id="leavesList"></div>
+                </div>
+            </div>
+            
+            <!-- 비교 결과 -->
+            <h3 style="margin-bottom:12px">🔄 스크린샷 vs 예상 멤버 비교</h3>
+            <div class="result-grid">
+                <div class="result-box matched">
+                    <h3>✅ 일치</h3>
+                    <div class="count" id="matchedCount">0</div>
+                    <ul id="matchedList"></ul>
+                </div>
+                <div class="result-box only-screenshot">
+                    <h3>⚠️ 스크린샷에만</h3>
+                    <div class="count" id="onlyScreenshotCount">0</div>
+                    <ul id="onlyScreenshotList"></ul>
+                </div>
+                <div class="result-box only-expected">
+                    <h3>❓ 예상에만</h3>
+                    <div class="count" id="onlyExpectedCount">0</div>
+                    <ul id="onlyExpectedList"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 상태
+        let selectedImages = [];
+        let selectedTextFile = null;
+        let baselineData = null;
+        
+        // 초기화
+        document.addEventListener('DOMContentLoaded', loadBaseline);
+        
+        // ========== 기준 데이터 ==========
+        
+        async function loadBaseline() {
+            try {
+                const res = await fetch('/api/baseline');
+                const data = await res.json();
+                if (data.exists && data.data) {
+                    baselineData = data.data;
+                    document.getElementById('baselineGuild').textContent = data.data.guildName || '-';
+                    document.getElementById('baselineDateDisplay').textContent = data.data.baselineDate;
+                    document.getElementById('baselineCountDisplay').textContent = data.data.baselineCount + '명';
+                    document.getElementById('guildNameInput').value = data.data.guildName || '';
+                    document.getElementById('baselineDateInput').value = data.data.baselineDate;
+                    document.getElementById('baselineCountInput').value = data.data.baselineCount;
+                }
+            } catch (e) {
+                console.error('기준 데이터 로드 실패:', e);
+            }
+        }
+        
+        async function saveBaseline() {
+            const data = {
+                guildName: document.getElementById('guildNameInput').value,
+                baselineDate: document.getElementById('baselineDateInput').value,
+                baselineCount: parseInt(document.getElementById('baselineCountInput').value) || 0,
+                members: baselineData?.members || []
+            };
+            
+            try {
+                const res = await fetch('/api/baseline', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (res.ok) {
+                    alert('기준 데이터가 저장되었습니다!');
+                    loadBaseline();
+                }
+            } catch (e) {
+                alert('저장 실패: ' + e.message);
+            }
+        }
+        
+        // ========== 이미지 업로드 ==========
+        
+        const imageUploadArea = document.getElementById('imageUploadArea');
+        const imageInput = document.getElementById('imageInput');
+        
+        imageUploadArea.addEventListener('click', () => imageInput.click());
+        imageUploadArea.addEventListener('dragover', e => { e.preventDefault(); imageUploadArea.classList.add('dragover'); });
+        imageUploadArea.addEventListener('dragleave', () => imageUploadArea.classList.remove('dragover'));
+        imageUploadArea.addEventListener('drop', e => {
+            e.preventDefault();
+            imageUploadArea.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+            if (files.length) addImages(files);
+        });
+        imageInput.addEventListener('change', e => {
+            if (e.target.files.length) addImages(Array.from(e.target.files));
+        });
+        
+        function addImages(files) {
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    selectedImages.push({ id: Date.now() + Math.random(), file, dataUrl: e.target.result });
+                    renderImagePreviews();
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        function removeImage(id) {
+            selectedImages = selectedImages.filter(img => img.id !== id);
+            renderImagePreviews();
+        }
+        
+        function renderImagePreviews() {
+            const container = document.getElementById('imagePreviews');
+            container.innerHTML = selectedImages.map(img => `
+                <div class="image-preview-item">
+                    <img src="${img.dataUrl}">
+                    <button class="remove-btn" onclick="removeImage(${img.id})">×</button>
+                </div>
+            `).join('');
+            
+            imageUploadArea.classList.toggle('has-file', selectedImages.length > 0);
+        }
+        
+        // ========== 텍스트 파일 업로드 ==========
+        
+        const textUploadArea = document.getElementById('textUploadArea');
+        const textInput = document.getElementById('textInput');
+        
+        textUploadArea.addEventListener('click', () => textInput.click());
+        textUploadArea.addEventListener('dragover', e => { e.preventDefault(); textUploadArea.classList.add('dragover'); });
+        textUploadArea.addEventListener('dragleave', () => textUploadArea.classList.remove('dragover'));
+        textUploadArea.addEventListener('drop', e => {
+            e.preventDefault();
+            textUploadArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file?.name.endsWith('.txt')) handleTextFile(file);
+        });
+        textInput.addEventListener('change', e => {
+            if (e.target.files[0]) handleTextFile(e.target.files[0]);
+        });
+        
+        function handleTextFile(file) {
+            selectedTextFile = file;
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatSize(file.size);
+            document.getElementById('fileInfo').classList.add('show');
+            textUploadArea.classList.add('has-file');
+        }
+        
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+        
+        // ========== 분석 ==========
+        
+        async function runAnalysis() {
+            if (!selectedTextFile) {
+                alert('채팅 로그 파일을 업로드해주세요');
+                return;
+            }
+            
+            if (selectedImages.length === 0) {
+                alert('멤버 스크린샷을 업로드해주세요');
+                return;
+            }
+            
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            
+            loading.classList.add('show');
+            results.classList.remove('show');
+            
+            try {
+                const formData = new FormData();
+                formData.append('chatlog', selectedTextFile);
+                selectedImages.forEach(img => formData.append('screenshots', img.file));
+                
+                const res = await fetch('/api/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    displayResults(data);
+                } else {
+                    alert('분석 실패: ' + (data.detail || '알 수 없는 오류'));
+                }
+            } catch (e) {
+                alert('오류: ' + e.message);
+            } finally {
+                loading.classList.remove('show');
+            }
+        }
+        
+        function displayResults(data) {
+            // 통계
+            document.getElementById('resultBaseline').textContent = data.baseline.count;
+            document.getElementById('resultJoins').textContent = '+' + data.chatlog.joins.length;
+            document.getElementById('resultLeaves').textContent = '-' + data.chatlog.leaves.length;
+            document.getElementById('resultCurrent').textContent = data.screenshot.count;
+            
+            // 입장 목록
+            document.getElementById('joinsList').innerHTML = data.chatlog.joins.length
+                ? data.chatlog.joins.map(j => `<div class="event-item join">${j.name}<span class="date">${j.date}</span></div>`).join('')
+                : '<div style="color:#666">없음</div>';
+            
+            // 퇴장 목록
+            document.getElementById('leavesList').innerHTML = data.chatlog.leaves.length
+                ? data.chatlog.leaves.map(l => `<div class="event-item leave">${l.name}<span class="date">${l.date}</span></div>`).join('')
+                : '<div style="color:#666">없음</div>';
+            
+            // 비교 결과
+            document.getElementById('matchedCount').textContent = data.comparison.matchedCount;
+            document.getElementById('onlyScreenshotCount').textContent = data.comparison.onlyInScreenshotCount;
+            document.getElementById('onlyExpectedCount').textContent = data.comparison.onlyInExpectedCount;
+            
+            document.getElementById('matchedList').innerHTML = 
+                data.comparison.matched.map(n => `<li>${n}</li>`).join('') || '<li style="color:#666">없음</li>';
+            document.getElementById('onlyScreenshotList').innerHTML = 
+                data.comparison.onlyInScreenshot.map(n => `<li>${n}</li>`).join('') || '<li style="color:#666">없음</li>';
+            document.getElementById('onlyExpectedList').innerHTML = 
+                data.comparison.onlyInExpected.map(n => `<li>${n}</li>`).join('') || '<li style="color:#666">없음</li>';
+            
+            document.getElementById('results').classList.add('show');
+            document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
