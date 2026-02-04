@@ -93,21 +93,37 @@ def clean_names(texts: List[str]) -> List[str]:
     """
     OCR 결과에서 이름만 정리
     - 한글 이름 추출
-    - 특수문자/숫자/영어 제거
+    - 짧은 영어는 유지 (x, st, zi 등은 이름의 일부일 수 있음)
+    - 긴 영어나 숫자는 제거
     """
     names = []
     for text in texts:
-        # 영어/숫자/특수문자가 섞인 텍스트는 스킵
-        if re.search(r'[a-zA-Z0-9]', text):
-            # 한글만 추출 시도
+        # 빈 텍스트 스킵
+        if not text or not text.strip():
+            continue
+
+        text = text.strip()
+
+        # 한글이 2글자 이상 있어야 함
+        korean_chars = re.findall(r'[가-힣]', text)
+        if len(korean_chars) < 2:
+            continue
+
+        # 순수 한글 또는 한글+짧은영어(3자 이하)는 유지
+        # 예: "수컷후x", "zi존종민", "움칫둠칫st"
+        if re.match(r'^[가-힣]+[a-zA-Z]{1,3}$', text):  # 한글+짧은영어
+            names.append(text)
+        elif re.match(r'^[a-zA-Z]{1,3}[가-힣]+$', text):  # 짧은영어+한글
+            names.append(text)
+        elif re.match(r'^[가-힣]+$', text):  # 순수 한글
+            names.append(text)
+        elif re.match(r'^[가-힣]+[a-zA-Z]{1,3}[가-힣]+$', text):  # 한글+영어+한글
+            names.append(text)
+        else:
+            # 그 외는 한글만 추출 (긴 영어/숫자 섞인 경우)
             korean_only = re.sub(r'[^가-힣]', '', text)
             if len(korean_only) >= 2:
                 names.append(korean_only)
-            continue
-
-        # 순수 한글 텍스트에서 2글자 이상 추출
-        korean_match = re.findall(r'[가-힣]{2,}', text)
-        names.extend(korean_match)
 
     # 중복 제거
     return list(dict.fromkeys(names))
@@ -153,11 +169,11 @@ def apply_confusion_correction(name: str, baseline_set: set) -> str:
     return name
 
 
-def find_fuzzy_match(name: str, baseline_set: set, max_distance: int = 1) -> Optional[str]:
+def find_fuzzy_match(name: str, baseline_set: set, max_distance: int = 2) -> Optional[str]:
     """
     편집거리 기반 유사 이름 찾기
-    - 길이가 같은 것만 비교
-    - 유사도 임계값: 0.5 (2글자 중 1글자 일치)
+    - 길이 차이 2 이하 허용 (zi, x, st 등의 접두/접미사 대응)
+    - 유사도 임계값: 0.55 (적당히 관대하게)
     """
     from difflib import SequenceMatcher
 
@@ -165,18 +181,19 @@ def find_fuzzy_match(name: str, baseline_set: set, max_distance: int = 1) -> Opt
     best_ratio = 0.0
 
     for baseline_name in baseline_set:
-        # 길이가 같아야 함
-        if len(name) != len(baseline_name):
+        # 길이 차이가 너무 크면 스킵
+        len_diff = abs(len(name) - len(baseline_name))
+        if len_diff > max_distance:
             continue
 
         # 유사도 계산
         ratio = SequenceMatcher(None, name, baseline_name).ratio()
 
-        # 임계값: 0.5 (절반 이상 일치)
-        # 2글자: 1글자 일치 = 0.5
-        # 3글자: 2글자 일치 = 0.67
-        # 4글자: 3글자 일치 = 0.75
-        threshold = 0.5
+        # 임계값: 길이가 같으면 더 엄격, 다르면 관대
+        if len_diff == 0:
+            threshold = 0.5  # 동캐 vs 똥캐 (0.50)
+        else:
+            threshold = 0.55  # 수컷우 vs 수컷후x (0.57), 존종민 vs zi존종민 (0.75)
 
         if ratio > best_ratio and ratio >= threshold:
             best_ratio = ratio

@@ -347,14 +347,15 @@ async def full_analysis(
         baseline.get('members', [])
     )
     
-    # 2. 스크린샷 OCR
+    # 2. 스크린샷 OCR (baseline 기반 교정 포함)
+    baseline_members = baseline.get('members', [])
     all_names = []
     for file in screenshots:
         if not file.content_type.startswith('image/'):
             continue
         image_bytes = await file.read()
         try:
-            names = extract_and_clean_names(image_bytes)
+            names = extract_and_clean_names(image_bytes, baseline_members)
             all_names.extend(names)
         except Exception as e:
             print(f"OCR 실패: {e}")
