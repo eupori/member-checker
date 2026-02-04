@@ -236,8 +236,27 @@
                 <input type="number" id="baselineCountInput" value="49" min="0" style="width:80px">
                 <button class="btn small" onclick="saveBaseline()">기준 저장</button>
             </div>
+            <details style="margin-top:12px;padding:12px;background:#f8f9fa;border-radius:8px">
+                <summary style="cursor:pointer;font-weight:bold;color:#666">🔧 OCR 설정 (인식률이 낮으면 조정하세요)</summary>
+                <div style="margin-top:12px;padding:12px;background:white;border-radius:6px">
+                    <p style="font-size:0.9rem;color:#666;margin-bottom:12px">
+                        현재 OCR 설정: 전처리 ON, 신뢰도 0.6, beamsearch decoder
+                    </p>
+                    <div style="color:#dc3545;font-size:0.85rem;margin-bottom:8px">
+                        ⚠️ 인식률이 떨어졌다면 백엔드 코드를 수정해야 합니다:
+                    </div>
+                    <ul style="font-size:0.85rem;color:#666;line-height:1.6;margin-left:20px">
+                        <li><code>backend/ocr.py:78</code> - 신뢰도 0.6 → 0.3 또는 0.4로 낮추기</li>
+                        <li><code>backend/ocr.py:233</code> - 전처리 OFF: use_preprocessing=False</li>
+                        <li><code>backend/ocr.py:67</code> - beamsearch → greedy: decoder='greedy'</li>
+                    </ul>
+                    <div style="margin-top:12px;padding:8px;background:#fff3cd;border-radius:4px;font-size:0.85rem">
+                        💡 <strong>빠른 롤백:</strong> <code>git revert HEAD</code>로 이전 버전 복원 가능
+                    </div>
+                </div>
+            </details>
         </div>
-        
+
         <!-- 업로드 영역 -->
         <div class="grid">
             <div class="card">
@@ -312,7 +331,19 @@
                     <div class="event-list" id="leavesList"></div>
                 </div>
             </div>
-            
+
+            <!-- OCR 인식 결과 -->
+            <div style="margin-bottom:24px">
+                <h3 style="margin-bottom:12px">👁️ OCR 인식된 이름 (스크린샷)</h3>
+                <div class="result-box" style="background:#e7f3ff;border:2px solid #0066cc">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                        <div class="count" id="ocrCount" style="font-size:2rem;color:#0066cc">0</div>
+                        <div style="font-size:0.9rem;color:#666">개 인식</div>
+                    </div>
+                    <ul id="ocrNamesList" style="max-height:200px;overflow-y:auto;list-style:none;padding:0"></ul>
+                </div>
+            </div>
+
             <!-- 비교 결과 -->
             <h3 style="margin-bottom:12px">🔄 스크린샷 vs 예상 멤버 비교</h3>
             <div class="result-grid">
@@ -525,7 +556,13 @@
             document.getElementById('leavesList').innerHTML = data.chatlog.leaves.length
                 ? data.chatlog.leaves.map(l => `<div class="event-item leave">${l.name}<span class="date">${l.date}</span></div>`).join('')
                 : '<div style="color:#666">없음</div>';
-            
+
+            // OCR 인식된 이름
+            document.getElementById('ocrCount').textContent = data.screenshot.count;
+            document.getElementById('ocrNamesList').innerHTML = data.screenshot.names.length
+                ? data.screenshot.names.map((name, idx) => `<li style="padding:4px 8px;border-bottom:1px solid #e0e0e0">${idx + 1}. ${name}</li>`).join('')
+                : '<li style="color:#666;padding:8px">인식된 이름 없음</li>';
+
             // 비교 결과
             document.getElementById('matchedCount').textContent = data.comparison.matchedCount;
             document.getElementById('onlyScreenshotCount').textContent = data.comparison.onlyInScreenshotCount;

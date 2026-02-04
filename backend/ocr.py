@@ -50,8 +50,8 @@ def preprocess_image(image_np: np.ndarray) -> np.ndarray:
 
 def extract_names_from_image(
     image_bytes: bytes,
-    use_preprocessing: bool = True,
-    confidence_threshold: float = 0.6
+    use_preprocessing: bool = False,
+    confidence_threshold: float = 0.3
 ) -> List[str]:
     """
     이미지에서 이름(텍스트) 추출
@@ -72,8 +72,7 @@ def extract_names_from_image(
     # OCR 실행 (최적화된 파라미터)
     results = reader.readtext(
         image_np,
-        decoder='beamsearch',  # greedy → beamsearch (더 정확)
-        beamWidth=5,           # 더 많은 후보 탐색
+        decoder='greedy',  # beamsearch는 너무 엄격함
         batch_size=1
     )
 
@@ -94,14 +93,22 @@ def clean_names(texts: List[str]) -> List[str]:
     """
     OCR 결과에서 이름만 정리
     - 한글 이름 추출
-    - 특수문자/숫자 제거
+    - 특수문자/숫자/영어 제거
     """
     names = []
     for text in texts:
-        # 한글만 추출 (2글자 이상)
+        # 영어/숫자/특수문자가 섞인 텍스트는 스킵
+        if re.search(r'[a-zA-Z0-9]', text):
+            # 한글만 추출 시도
+            korean_only = re.sub(r'[^가-힣]', '', text)
+            if len(korean_only) >= 2:
+                names.append(korean_only)
+            continue
+
+        # 순수 한글 텍스트에서 2글자 이상 추출
         korean_match = re.findall(r'[가-힣]{2,}', text)
         names.extend(korean_match)
-    
+
     # 중복 제거
     return list(dict.fromkeys(names))
 
@@ -149,8 +156,8 @@ def apply_confusion_correction(name: str, baseline_set: set) -> str:
 def find_fuzzy_match(name: str, baseline_set: set, max_distance: int = 1) -> Optional[str]:
     """
     편집거리 기반 유사 이름 찾기
-    - 길이 차이 max_distance 이하만 비교
-    - 유사도 임계값: 한글은 0.5 (단일 문자 변경 허용)
+    - 길이가 같은 것만 비교
+    - 유사도 임계값: 0.5 (2글자 중 1글자 일치)
     """
     from difflib import SequenceMatcher
 
@@ -158,15 +165,18 @@ def find_fuzzy_match(name: str, baseline_set: set, max_distance: int = 1) -> Opt
     best_ratio = 0.0
 
     for baseline_name in baseline_set:
-        # 길이 차이가 너무 크면 스킵
-        if abs(len(name) - len(baseline_name)) > max_distance:
+        # 길이가 같아야 함
+        if len(name) != len(baseline_name):
             continue
 
         # 유사도 계산
         ratio = SequenceMatcher(None, name, baseline_name).ratio()
 
-        # 한글은 단일 문자 변경도 큰 차이로 보이므로 임계값 낮춤
-        threshold = 0.5 if len(name) >= 2 else 0.7
+        # 임계값: 0.5 (절반 이상 일치)
+        # 2글자: 1글자 일치 = 0.5
+        # 3글자: 2글자 일치 = 0.67
+        # 4글자: 3글자 일치 = 0.75
+        threshold = 0.5
 
         if ratio > best_ratio and ratio >= threshold:
             best_ratio = ratio
@@ -226,11 +236,11 @@ def extract_and_clean_names(
     2. 최적화된 OCR 파라미터 (beamsearch, 신뢰도 0.6)
     3. 후처리 교정 (ㅁ/ㅇ 혼동, 퍼지 매칭)
     """
-    # 1. OCR 실행 (전처리 + 최적화 파라미터)
+    # 1. OCR 실행 (전처리 OFF, 신뢰도 낮춤)
     raw_texts = extract_names_from_image(
         image_bytes,
-        use_preprocessing=True,
-        confidence_threshold=0.6
+        use_preprocessing=False,
+        confidence_threshold=0.3
     )
 
     # 2. 한글 이름만 추출
