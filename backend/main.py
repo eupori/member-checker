@@ -244,14 +244,18 @@ async def parse_chatlog_file(file: UploadFile = File(...)):
 
 @app.post("/api/ocr")
 async def ocr_image(file: UploadFile = File(...)):
-    """이미지에서 이름 추출 (OCR)"""
+    """이미지에서 이름 추출 (OCR) - baseline 보정 포함"""
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="이미지 파일만 업로드 가능합니다")
-    
+
     image_bytes = await file.read()
-    
+
+    # 베이스라인 로드 (후처리 교정용)
+    baseline = load_baseline()
+    baseline_members = baseline.get('members', []) if baseline else None
+
     try:
-        names = extract_and_clean_names(image_bytes)
+        names = extract_and_clean_names(image_bytes, baseline_members)
         return {
             "success": True,
             "names": names,
@@ -263,23 +267,27 @@ async def ocr_image(file: UploadFile = File(...)):
 
 @app.post("/api/ocr-multiple")
 async def ocr_multiple_images(files: List[UploadFile] = File(...)):
-    """여러 이미지에서 이름 추출 (OCR)"""
+    """여러 이미지에서 이름 추출 (OCR) - baseline 보정 포함"""
+    # 베이스라인 로드 (후처리 교정용)
+    baseline = load_baseline()
+    baseline_members = baseline.get('members', []) if baseline else None
+
     all_names = []
-    
+
     for file in files:
         if not file.content_type.startswith('image/'):
             continue
-        
+
         image_bytes = await file.read()
         try:
-            names = extract_and_clean_names(image_bytes)
+            names = extract_and_clean_names(image_bytes, baseline_members)
             all_names.extend(names)
         except Exception as e:
             print(f"OCR 실패 ({file.filename}): {e}")
-    
+
     # 중복 제거
     unique_names = list(dict.fromkeys(all_names))
-    
+
     return {
         "success": True,
         "names": unique_names,
